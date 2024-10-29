@@ -6,6 +6,12 @@
   "files": [
     "dist"
   ],
+  "license": "MIT",
+  "keywords": [
+    "command",
+    "commander",
+    "command-line"
+  ],
   "main": "./dist/index.umd.cjs",
   "module": "./dist/index.js",
   "types": "./index.d.ts",
