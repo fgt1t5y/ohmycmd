@@ -4,26 +4,48 @@ interface CommanderOptions {
 
 interface SchemaOptions {
   label?: string;
+  // value slot name
   name?: string;
+  [key: string]: any;
 }
 
-type SchemaSet = Record<string, Schema[]>;
-type BindSet = Record<string, Function>;
+type SchemaMap = Record<string, Schema[]>;
+type ResolvedValueMap = Record<string, unknown>;
+
+class ParseResult {
+  public pass: boolean = false;
+  public originCommand: string = "";
+  public arguments: string[] = [];
+  public resolvedValue: ResolvedValueMap = {};
+
+  constructor(command: string) {
+    this.originCommand = command;
+  }
+
+  public setPassed(pass: boolean) {
+    this.pass = pass;
+    return this;
+  }
+}
 
 abstract class Schema {
-  public option: SchemaOptions | null;
-  public nextSchema: Schema | null;
+  public option?: SchemaOptions;
+  public label?: string;
+  public name?: string;
+  public nextSchema?: Schema;
 
   constructor(option?: SchemaOptions, next?: Schema) {
-    this.option = option || null;
-    this.nextSchema = next || null;
+    this.option = option;
+    this.label = option?.label;
+    this.name = option?.name;
+    this.nextSchema = next;
   }
 
   // convert self and children to an array
   public toArray(): Schema[] {
     const schemas: Schema[] = [this];
-    let schema: Schema | null = this;
-    if (schema.nextSchema === null) return schemas;
+    let schema: Schema | undefined = this;
+    if (!schema.nextSchema) return schemas;
     while (schema) {
       if (schema.nextSchema) {
         schemas.push(schema.nextSchema);
@@ -35,6 +57,8 @@ abstract class Schema {
   }
 
   public abstract check(value: string): boolean;
+
+  public abstract value(value: string): any;
 }
 
 export class Subcommand extends Schema {
@@ -43,7 +67,11 @@ export class Subcommand extends Schema {
   }
 
   public check(value: string): boolean {
-    return value === this.option!.label;
+    return value === this.label;
+  }
+
+  public value(value: string): string {
+    return value;
   }
 }
 
@@ -55,6 +83,10 @@ export class IntegerSchema extends Schema {
   public check(value: string): boolean {
     return Number.isInteger(parseInt(value));
   }
+
+  public value(value: string): number {
+    return parseInt(value);
+  }
 }
 
 export class StringSchema extends Schema {
@@ -65,6 +97,10 @@ export class StringSchema extends Schema {
   public check(): boolean {
     return true;
   }
+
+  public value(value: string): string {
+    return value;
+  }
 }
 
 export class BoolSchema extends Schema {
@@ -73,26 +109,25 @@ export class BoolSchema extends Schema {
   }
 
   public check(value: string): boolean {
-    return ["true", "false"].findIndex((v: string) => v === value) > -1;
+    return value === "true" || value === "false";
+  }
+
+  public value(value: string): boolean {
+    return value === "true" ? true : false;
   }
 }
 
 export class Commander {
-  public schemas: SchemaSet;
-  public binds: BindSet;
+  public schemas: SchemaMap;
   public commandPrefix?: string;
 
   constructor(option?: CommanderOptions) {
     this.schemas = {};
-    this.binds = {};
     this.commandPrefix = option?.commandPrefix;
   }
 
-  public add(label: string, schemas?: Schema[], bind?: Function) {
+  public add(label: string, schemas?: Schema[]) {
     this.schemas[label] = schemas || [];
-    if (bind) {
-      this.binds[label] = bind;
-    }
   }
 
   public remove(label: string) {
@@ -105,49 +140,60 @@ export class Commander {
     this.schemas = {};
   }
 
-  public execute(command: string): boolean {
+  public parse(command: string): ParseResult {
+    const result = new ParseResult(command);
     let cmd = command.trim();
 
     if (this.commandPrefix) {
-      if (!cmd.startsWith(this.commandPrefix)) return false;
+      if (!cmd.startsWith(this.commandPrefix)) {
+        return result.setPassed(false);
+      }
 
       cmd = cmd.slice(this.commandPrefix.length);
     }
 
     const cmdArguments = cmd.split(" ");
-    // deep copy
-    const cmdSchemas: Schema[] = this.schemas[cmdArguments[0]];
+    const cmdSchemas = this.schemas[cmdArguments[0]];
 
     if (!cmdSchemas) {
       // If the command does not exist.
-      return false;
+      return result.setPassed(false);
     }
+
     if (cmdSchemas.length === 0) {
-      return cmdArguments.length > 1 ? false : true;
+      if (cmdArguments.length > 1) {
+        return result.setPassed(false);
+      } else {
+        return result.setPassed(true);
+      }
     }
+
     if (cmdSchemas.length > 0 && cmdArguments.length < 2) {
       // If the arguments is too few.
-      return false;
+      return result.setPassed(false);
     }
 
     // remove command's head
     cmdArguments.shift();
 
-    let schemaIndex = 0,
-      argumentIndex;
+    let schemaIndex = 0;
+
     for (; schemaIndex < cmdSchemas.length; schemaIndex++) {
       const schemas = cmdSchemas[schemaIndex].toArray();
       const argumentPass = [];
+      const resolvedValue: ResolvedValueMap = {};
+      let argumentIndex = 0;
 
-      for (
-        argumentIndex = 0;
-        argumentIndex < cmdArguments.length;
-        argumentIndex++
-      ) {
-        if (!schemas[argumentIndex]) break;
-        argumentPass.push(
-          schemas[argumentIndex].check(cmdArguments[argumentIndex])
-        );
+      for (; argumentIndex < cmdArguments.length; argumentIndex++) {
+        const schema = schemas[argumentIndex];
+        if (!schema) break;
+        const pass = schema.check(cmdArguments[argumentIndex]);
+        argumentPass.push(pass);
+        if (pass && schema.name) {
+          resolvedValue[schema.name] = schema.value(
+            cmdArguments[argumentIndex]
+          );
+        }
       }
 
       if (
@@ -155,10 +201,20 @@ export class Commander {
         argumentPass.length === schemas.length &&
         argumentPass.every((pass) => pass)
       ) {
-        return true;
+        result.arguments = cmdArguments;
+        result.resolvedValue = resolvedValue;
+        return result.setPassed(true);
       }
     }
 
-    return false;
+    return result.setPassed(false);
+  }
+
+  public test(command: string) {
+    return this.parse(command).pass;
+  }
+
+  public execute(command: string, func: Function) {
+    func.apply(null, Object.values(this.parse(command).resolvedValue));
   }
 }
