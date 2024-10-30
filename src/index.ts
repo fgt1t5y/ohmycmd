@@ -6,7 +6,7 @@ interface SchemaOptions {
   label?: string;
   // value slot name
   name?: string;
-  [key: string]: any;
+  optional?: boolean;
 }
 
 type SchemaMap = Record<string, Schema[]>;
@@ -32,12 +32,14 @@ abstract class Schema {
   public option?: SchemaOptions;
   public label?: string;
   public name?: string;
+  public optional: boolean = true;
   public nextSchema?: Schema;
 
   constructor(option?: SchemaOptions, next?: Schema) {
     this.option = option;
     this.label = option?.label;
     this.name = option?.name;
+    this.optional = option?.optional ?? true;
     this.nextSchema = next;
   }
 
@@ -126,8 +128,43 @@ export class Commander {
     this.commandPrefix = option?.commandPrefix;
   }
 
+  private _add(label: string, schema: Schema) {
+    const schemaArray = schema.toArray();
+    let optionalSchemaStart = false;
+
+    for (let index = 0; index < schemaArray.length; index++) {
+      if (schemaArray[index].optional) {
+        if (optionalSchemaStart) {
+          throw new Error(
+            "Optional schemas must place at tail of schema chain."
+          );
+        }
+        continue;
+      } else {
+        optionalSchemaStart = true;
+      }
+    }
+
+    if (Array.isArray(this.schemas[label])) {
+      this.schemas[label].push(schema);
+    } else {
+      this.schemas[label] = [schema];
+    }
+  }
+
   public add(label: string, schemas?: Schema[]) {
-    this.schemas[label] = schemas || [];
+    if ((!schemas || schemas.length === 0) && !this.schemas[label]) {
+      this.schemas[label] = [];
+      return;
+    }
+
+    if (!Array.isArray(schemas)) {
+      throw new Error("Argument `schemas` is not a array");
+    }
+
+    schemas.forEach((schema) => {
+      this._add(label, schema);
+    });
   }
 
   public remove(label: string) {
