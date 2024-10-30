@@ -138,8 +138,9 @@ export class Commander {
           throw new Error(
             "Optional schemas must place at tail of schema chain."
           );
+        } else {
+          continue;
         }
-        continue;
       } else {
         optionalSchemaStart = true;
       }

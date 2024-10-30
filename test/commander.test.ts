@@ -18,7 +18,7 @@ test("option", () => {
 test("add command", () => {
   const cmd = new Commander();
   cmd.add("stop");
-  
+
   expect(cmd.test("/stop")).toBe(false);
   expect(cmd.test("stop server")).toBe(false);
 
@@ -89,4 +89,14 @@ test("resolve value", () => {
     username: "admin",
     password: "admin",
   });
+});
+
+test("error", () => {
+  const cmd = new Commander();
+  
+  expect(() =>
+    cmd.add("setlevel", [
+      new IntegerSchema({ optional: false }, new StringSchema()),
+    ])
+  ).toThrowError();
 });
