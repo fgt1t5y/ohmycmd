@@ -1,3 +1,5 @@
+import { toStrictInteger } from "./helper";
+
 interface CommanderOptions {
   commandPrefix?: string;
 }
@@ -7,6 +9,11 @@ interface SchemaOptions {
   // value slot name
   name?: string;
   optional?: boolean;
+}
+
+interface IntegerSchemaOptions extends SchemaOptions {
+  min?: number;
+  max?: number;
 }
 
 type SchemaMap = Record<string, Schema[]>;
@@ -29,14 +36,12 @@ class ParseResult {
 }
 
 abstract class Schema {
-  public option?: SchemaOptions;
   public label?: string;
   public name?: string;
   public optional: boolean = true;
   public next?: Schema;
 
   constructor(option?: SchemaOptions, next?: Schema) {
-    this.option = option;
     this.label = option?.label;
     this.name = option?.name;
     this.optional = option?.optional ?? true;
@@ -78,12 +83,27 @@ export class Subcommand extends Schema {
 }
 
 export class IntegerSchema extends Schema {
-  constructor(option?: SchemaOptions, next?: Schema) {
+  public min?: number;
+  public max?: number;
+
+  constructor(option?: IntegerSchemaOptions, next?: Schema) {
     super(option, next);
+    this.min = option?.min;
+    this.max = option?.max;
   }
 
   public check(value: string): boolean {
-    return Number.isInteger(parseInt(value));
+    const number = toStrictInteger(value);
+
+    if (!Number.isInteger(number)) {
+      return false;
+    }
+
+    if ((this.min && number < this.min) || (this.max && number > this.max)) {
+      return false;
+    }
+
+    return true;
   }
 
   public value(value: string): number {

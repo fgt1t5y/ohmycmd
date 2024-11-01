@@ -36,10 +36,13 @@ test("add subcommand", () => {
 
 test("integer schema", () => {
   const cmd = new Commander();
-  cmd.add("time", [new Subcommand("set", new IntegerSchema())]);
+  cmd.add("time", [new Subcommand("set", new IntegerSchema({ min: 1000, max: 3000 }))]);
 
   expect(cmd.test("time set")).toBe(false);
   expect(cmd.test("time set day")).toBe(false);
+  expect(cmd.test("time set 1000s")).toBe(false);
+  expect(cmd.test("time set 999")).toBe(false);
+  expect(cmd.test("time set 3001")).toBe(false);
 
   expect(cmd.test("time set 1000")).toBe(true);
 });
@@ -93,7 +96,7 @@ test("resolve value", () => {
 
 test("error", () => {
   const cmd = new Commander();
-  
+
   expect(() =>
     cmd.add("setlevel", [
       new IntegerSchema({ optional: false }, new StringSchema()),
