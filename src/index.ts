@@ -33,26 +33,26 @@ abstract class Schema {
   public label?: string;
   public name?: string;
   public optional: boolean = true;
-  public nextSchema?: Schema;
+  public next?: Schema;
 
   constructor(option?: SchemaOptions, next?: Schema) {
     this.option = option;
     this.label = option?.label;
     this.name = option?.name;
     this.optional = option?.optional ?? true;
-    this.nextSchema = next;
+    this.next = next;
   }
 
   // convert self and children to an array
   public toArray(): Schema[] {
     const schemas: Schema[] = [this];
     let schema: Schema | undefined = this;
-    if (!schema.nextSchema) return schemas;
+    if (!schema.next) return schemas;
     while (schema) {
-      if (schema.nextSchema) {
-        schemas.push(schema.nextSchema);
-        schema = schema.nextSchema;
-        if (!schema.nextSchema) break;
+      if (schema.next) {
+        schemas.push(schema.next);
+        schema = schema.next;
+        if (!schema.next) break;
       }
     }
     return schemas;
