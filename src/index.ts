@@ -1,4 +1,10 @@
-import { toStrictInteger } from "./helper";
+const toStrictInteger = (value: string) => {
+  if (/^(\-|\+)?([0-9]+)$/.test(value)) {
+    return Number(value);
+  } else {
+    return NaN;
+  }
+};
 
 interface CommanderOptions {
   commandPrefix?: string;
@@ -8,7 +14,6 @@ interface SchemaOptions {
   label?: string;
   // value slot name
   name?: string;
-  optional?: boolean;
 }
 
 interface IntegerSchemaOptions extends SchemaOptions {
@@ -25,10 +30,6 @@ class ParseResult {
   public arguments: string[] = [];
   public resolvedValue: ResolvedValueMap = {};
 
-  constructor(command: string) {
-    this.originCommand = command;
-  }
-
   public setPassed(pass: boolean) {
     this.pass = pass;
     return this;
@@ -38,13 +39,11 @@ class ParseResult {
 abstract class Schema {
   public label?: string;
   public name?: string;
-  public optional: boolean = true;
   public next?: Schema;
 
   constructor(option?: SchemaOptions, next?: Schema) {
     this.label = option?.label;
     this.name = option?.name;
-    this.optional = option?.optional ?? true;
     this.next = next;
   }
 
@@ -148,43 +147,17 @@ export class Commander {
     this.commandPrefix = option?.commandPrefix;
   }
 
-  private _add(label: string, schema: Schema) {
-    const schemaArray = schema.toArray();
-    let optionalSchemaStart = false;
-
-    for (let index = 0; index < schemaArray.length; index++) {
-      if (schemaArray[index].optional) {
-        if (optionalSchemaStart) {
-          throw new Error(
-            "Optional schemas must place at tail of schema chain."
-          );
-        } else {
-          continue;
-        }
-      } else {
-        optionalSchemaStart = true;
-      }
-    }
-
-    if (Array.isArray(this.schemas[label])) {
-      this.schemas[label].push(schema);
-    } else {
-      this.schemas[label] = [schema];
-    }
-  }
-
   public add(label: string, schemas?: Schema[]) {
-    if ((!schemas || schemas.length === 0) && !this.schemas[label]) {
+    if (!this.schemas[label]) {
       this.schemas[label] = [];
+    }
+
+    if (!schemas) {
       return;
     }
 
-    if (!Array.isArray(schemas)) {
-      throw new Error("Argument `schemas` is not a array");
-    }
-
     schemas.forEach((schema) => {
-      this._add(label, schema);
+      this.schemas[label].push(schema);
     });
   }
 
@@ -199,7 +172,9 @@ export class Commander {
   }
 
   public parse(command: string): ParseResult {
-    const result = new ParseResult(command);
+    const result = new ParseResult();
+    result.originCommand = command;
+
     let cmd = command.trim();
 
     if (this.commandPrefix) {
@@ -210,7 +185,7 @@ export class Commander {
       cmd = cmd.slice(this.commandPrefix.length);
     }
 
-    const cmdArguments = cmd.split(" ");
+    const cmdArguments = cmd.split(" ").filter((arg) => arg.length > 0);
     const cmdSchemas = this.schemas[cmdArguments[0]];
 
     if (!cmdSchemas) {

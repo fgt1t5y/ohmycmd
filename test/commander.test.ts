@@ -93,13 +93,3 @@ test("resolve value", () => {
     password: "admin",
   });
 });
-
-test("error", () => {
-  const cmd = new Commander();
-
-  expect(() =>
-    cmd.add("setlevel", [
-      new IntegerSchema({ optional: false }, new StringSchema()),
-    ])
-  ).toThrowError();
-});
